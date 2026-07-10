@@ -2,11 +2,14 @@ package com.zjj.chatsystem.service.impl;
 
 import com.zjj.chatsystem.common.exception.BusinessException;
 import com.zjj.chatsystem.common.exception.ErrorCode;
+import com.zjj.chatsystem.domain.dto.GroupMemberVO;
 import com.zjj.chatsystem.domain.dto.GroupVO;
 import com.zjj.chatsystem.domain.entity.Group;
 import com.zjj.chatsystem.domain.entity.GroupMember;
+import com.zjj.chatsystem.domain.entity.User;
 import com.zjj.chatsystem.mapper.GroupMapper;
 import com.zjj.chatsystem.mapper.GroupMemberMapper;
+import com.zjj.chatsystem.mapper.UserMapper;
 import com.zjj.chatsystem.service.GroupService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -21,10 +24,12 @@ public class GroupServiceImpl implements GroupService {
 
     private final GroupMapper groupMapper;
     private final GroupMemberMapper groupMemberMapper;
+    private final UserMapper userMapper;
 
-    public GroupServiceImpl(GroupMapper groupMapper, GroupMemberMapper groupMemberMapper) {
+    public GroupServiceImpl(GroupMapper groupMapper, GroupMemberMapper groupMemberMapper, UserMapper userMapper) {
         this.groupMapper = groupMapper;
         this.groupMemberMapper = groupMemberMapper;
+        this.userMapper = userMapper;
     }
 
     @Override
@@ -33,7 +38,7 @@ public class GroupServiceImpl implements GroupService {
         group.setName(name);
         group.setDescription(description);
         group.setOwnerId(ownerId);
-        group.setMemberCount(1);
+        group.setMemberCount(0);
         group.setCreatedAt(LocalDateTime.now());
         groupMapper.insert(group);
 
@@ -100,6 +105,26 @@ public class GroupServiceImpl implements GroupService {
     @Override
     public List<GroupMember> getMembers(Long groupId) {
         return groupMemberMapper.findByGroupId(groupId);
+    }
+
+    @Override
+    public List<GroupMemberVO> getMemberVOs(Long groupId) {
+        List<GroupMember> members = groupMemberMapper.findByGroupId(groupId);
+        List<GroupMemberVO> result = new ArrayList<>();
+        for (GroupMember m : members) {
+            User user = userMapper.selectById(m.getUserId());
+            GroupMemberVO vo = new GroupMemberVO();
+            vo.setId(m.getId());
+            vo.setGroupId(m.getGroupId());
+            vo.setUserId(m.getUserId());
+            vo.setUsername(user != null ? user.getUsername() : "");
+            vo.setNickname(user != null ? user.getNickname() : "");
+            vo.setAvatar(user != null ? user.getAvatar() : "");
+            vo.setRole(m.getRole());
+            vo.setJoinedAt(m.getJoinedAt());
+            result.add(vo);
+        }
+        return result;
     }
 
     @Override

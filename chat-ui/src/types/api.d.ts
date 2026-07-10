@@ -81,6 +81,30 @@ export interface FriendRequestVO {
   createdAt: string
 }
 
+/** 群组信息 */
+export interface GroupVO {
+  id: number
+  name: string
+  avatar?: string
+  description?: string
+  ownerId: number
+  memberCount: number
+  role: string
+  createdAt: string
+}
+
+/** 群成员（含用户信息） */
+export interface GroupMember {
+  id: number
+  groupId: number
+  userId: number
+  username: string
+  nickname: string
+  avatar?: string
+  role: string
+  joinedAt: string
+}
+
 /** 好友信息 */
 export interface FriendVO {
   id?: number

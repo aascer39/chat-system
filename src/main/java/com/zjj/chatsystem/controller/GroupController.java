@@ -1,9 +1,8 @@
 package com.zjj.chatsystem.controller;
 
 import com.zjj.chatsystem.common.result.Result;
+import com.zjj.chatsystem.domain.dto.GroupMemberVO;
 import com.zjj.chatsystem.domain.dto.GroupVO;
-import com.zjj.chatsystem.domain.dto.UserVO;
-import com.zjj.chatsystem.domain.entity.GroupMember;
 import com.zjj.chatsystem.service.GroupService;
 import com.zjj.chatsystem.service.UserService;
 import org.springframework.web.bind.annotation.*;
@@ -63,10 +62,10 @@ public class GroupController {
     }
 
     /**
-     * 获取群成员列表
+     * 获取群成员列表（含用户名、昵称、头像）
      */
     @GetMapping("/{groupId}/members")
-    public Result<List<GroupMember>> members(@PathVariable Long groupId) {
-        return Result.success(groupService.getMembers(groupId));
+    public Result<List<GroupMemberVO>> members(@PathVariable Long groupId) {
+        return Result.success(groupService.getMemberVOs(groupId));
     }
 }

@@ -1,6 +1,7 @@
 package com.zjj.chatsystem.domain.entity;
 
 import com.baomidou.mybatisplus.annotation.IdType;
+import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
@@ -10,8 +11,6 @@ import java.time.LocalDateTime;
 
 /**
  * 聊天消息实体
- *
- * @TableName chat_messages
  */
 @Data
 @TableName("chat_messages")
@@ -36,4 +35,8 @@ public class ChatMessage {
     private Long groupId;
 
     private LocalDateTime createdAt;
+
+    /** 发送者昵称（非持久化，仅用于群聊传输） */
+    @TableField(exist = false)
+    private String senderName;
 }

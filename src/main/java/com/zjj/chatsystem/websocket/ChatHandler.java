@@ -123,6 +123,8 @@ public class ChatHandler extends TextWebSocketHandler {
 
             if (chatMessage.getGroupId() != null) {
                 // ── 群消息：推送给所有在线群成员（除发送方） ──
+                User sender = userMapper.selectById(chatMessage.getSenderId());
+                chatMessage.setSenderName(sender != null ? sender.getNickname() : sender.getUsername());
                 chatMessage.setStatus("DELIVERED");
                 chatMessageService.updateStatus(chatMessage.getId(), "DELIVERED");
                 String msgJson = objectMapper.writeValueAsString(chatMessage);

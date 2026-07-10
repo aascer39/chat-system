@@ -1,5 +1,6 @@
 package com.zjj.chatsystem.service;
 
+import com.zjj.chatsystem.domain.dto.GroupMemberVO;
 import com.zjj.chatsystem.domain.dto.GroupVO;
 import com.zjj.chatsystem.domain.entity.GroupMember;
 
@@ -34,6 +35,11 @@ public interface GroupService {
      * 获取群组所有成员
      */
     List<GroupMember> getMembers(Long groupId);
+
+    /**
+     * 获取群组成员列表（含用户名、昵称、头像）
+     */
+    List<GroupMemberVO> getMemberVOs(Long groupId);
 
     /**
      * 校验用户是否为群成员
