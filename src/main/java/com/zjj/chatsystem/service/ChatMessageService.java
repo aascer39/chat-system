@@ -24,11 +24,12 @@ public interface ChatMessageService {
     ChatMessage getById(Long id);
 
     /**
-     * 分页查询与指定用户的聊天历史（按时间倒序，最新的在前）
+     * 分页查询聊天历史（按时间倒序，最新的在前）
      *
-     * @param otherUserId 聊天对方用户 ID
+     * @param otherUserId 聊天对方用户 ID（单聊时传）
+     * @param groupId     群组 ID（群聊时传）
      * @param page        页码
      * @param size        每页条数
      */
-    PageResult<ChatMessage> getHistory(Long otherUserId, int page, int size);
+    PageResult<ChatMessage> getHistory(Long otherUserId, Long groupId, int page, int size);
 }

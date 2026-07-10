@@ -104,7 +104,7 @@ async function loadHistory() {
   if (!selectedUser.value) return
   loadingHistory.value = true
   try {
-    const res = await getHistory(selectedUser.value.userId, historyPage.value, 20)
+    const res = await getHistory({ userId: selectedUser.value.userId, page: historyPage.value, size: 20 })
     const list = (res.records || []).reverse() // API 返回倒序（最新在前），反转后最早在前
     if (historyPage.value === 1) {
       messages.value = list

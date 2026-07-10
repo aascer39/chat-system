@@ -42,15 +42,21 @@ public class ChatMessageServiceImpl implements ChatMessageService {
     }
 
     @Override
-    public PageResult<ChatMessage> getHistory(Long otherUserId, int page, int size) {
-        Long currentUserId = userService.getCurrentUser().getId();
-
+    public PageResult<ChatMessage> getHistory(Long otherUserId, Long groupId, int page, int size) {
         LambdaQueryWrapper<ChatMessage> wrapper = new LambdaQueryWrapper<ChatMessage>()
-                .and(w -> w.eq(ChatMessage::getSenderId, currentUserId)
-                        .eq(ChatMessage::getReceiverId, otherUserId))
-                .or(w -> w.eq(ChatMessage::getSenderId, otherUserId)
-                        .eq(ChatMessage::getReceiverId, currentUserId))
                 .orderByDesc(ChatMessage::getCreatedAt);
+
+        if (groupId != null) {
+            // 群聊历史
+            wrapper.eq(ChatMessage::getGroupId, groupId);
+        } else {
+            // 单聊历史
+            Long currentUserId = userService.getCurrentUser().getId();
+            wrapper.and(w -> w.eq(ChatMessage::getSenderId, currentUserId)
+                            .eq(ChatMessage::getReceiverId, otherUserId))
+                    .or(w -> w.eq(ChatMessage::getSenderId, otherUserId)
+                            .eq(ChatMessage::getReceiverId, currentUserId));
+        }
 
         Page<ChatMessage> mpPage = new Page<>(page, size);
         chatMessageMapper.selectPage(mpPage, wrapper);

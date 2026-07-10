@@ -3,9 +3,11 @@ package com.zjj.chatsystem.websocket;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.zjj.chatsystem.domain.entity.ChatMessage;
+import com.zjj.chatsystem.domain.entity.GroupMember;
 import com.zjj.chatsystem.domain.entity.User;
 import com.zjj.chatsystem.mapper.UserMapper;
 import com.zjj.chatsystem.service.ChatMessageService;
+import com.zjj.chatsystem.service.GroupService;
 import com.zjj.chatsystem.utils.JwtUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -32,12 +34,15 @@ public class ChatHandler extends TextWebSocketHandler {
     private final JwtUtil jwtUtil;
     private final UserMapper userMapper;
     private final ChatMessageService chatMessageService;
+    private final GroupService groupService;
 
-    public ChatHandler(ObjectMapper objectMapper, JwtUtil jwtUtil, UserMapper userMapper, ChatMessageService chatMessageService) {
+    public ChatHandler(ObjectMapper objectMapper, JwtUtil jwtUtil, UserMapper userMapper,
+                       ChatMessageService chatMessageService, GroupService groupService) {
         this.objectMapper = objectMapper;
         this.jwtUtil = jwtUtil;
         this.userMapper = userMapper;
         this.chatMessageService = chatMessageService;
+        this.groupService = groupService;
     }
 
     @Override
@@ -116,14 +121,30 @@ public class ChatHandler extends TextWebSocketHandler {
             // 写入数据库（同步，之后 chatMessage.getId() 可用）
             chatMessageService.saveMessage(chatMessage);
 
-            // 推送接收方
-            String receiver = getUsernameById(chatMessage.getReceiverId());
-            WebSocketSession receiverSession = onlineUsers.get(receiver);
-            if (receiverSession != null && receiverSession.isOpen()) {
+            if (chatMessage.getGroupId() != null) {
+                // ── 群消息：推送给所有在线群成员（除发送方） ──
                 chatMessage.setStatus("DELIVERED");
-                // 更新数据库状态为 DELIVERED
                 chatMessageService.updateStatus(chatMessage.getId(), "DELIVERED");
-                receiverSession.sendMessage(new TextMessage(objectMapper.writeValueAsString(chatMessage)));
+                String msgJson = objectMapper.writeValueAsString(chatMessage);
+
+                List<GroupMember> members = groupService.getMembers(chatMessage.getGroupId());
+                for (GroupMember member : members) {
+                    if (member.getUserId().equals(chatMessage.getSenderId())) continue;
+                    String memberName = getUsernameById(member.getUserId());
+                    WebSocketSession memberSession = onlineUsers.get(memberName);
+                    if (memberSession != null && memberSession.isOpen()) {
+                        memberSession.sendMessage(new TextMessage(msgJson));
+                    }
+                }
+            } else {
+                // ── 单聊：推送给接收方 ──
+                String receiver = getUsernameById(chatMessage.getReceiverId());
+                WebSocketSession receiverSession = onlineUsers.get(receiver);
+                if (receiverSession != null && receiverSession.isOpen()) {
+                    chatMessage.setStatus("DELIVERED");
+                    chatMessageService.updateStatus(chatMessage.getId(), "DELIVERED");
+                    receiverSession.sendMessage(new TextMessage(objectMapper.writeValueAsString(chatMessage)));
+                }
             }
 
             // 回复发送者确认（包含最新状态）

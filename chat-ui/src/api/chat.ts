@@ -8,6 +8,6 @@ export interface PageData<T> {
   pageSize: number
 }
 
-/** 获取与指定用户的聊天历史（分页，按时间倒序） */
-export const getHistory = (userId: number, page = 1, size = 20) =>
-  request.get<PageData<ChatMessage>>('/chat/history', { params: { userId, page, size } })
+/** 获取聊天历史（分页，按时间倒序）。单聊传 userId，群聊传 groupId */
+export const getHistory = (params: { userId?: number; groupId?: number; page?: number; size?: number }) =>
+  request.get<PageData<ChatMessage>>('/chat/history', { params })

@@ -46,17 +46,19 @@ public class ChatController {
     }
 
     /**
-     * 获取与指定好友的聊天历史（分页，按时间倒序）
+     * 获取聊天历史（分页，按时间倒序）
      *
-     * @param userId 聊天对方用户 ID
-     * @param page   页码，从 1 开始
-     * @param size   每页条数，默认 20
+     * @param userId  聊天对方用户 ID（单聊时传）
+     * @param groupId 群组 ID（群聊时传）
+     * @param page    页码，从 1 开始
+     * @param size    每页条数，默认 20
      */
     @GetMapping("/history")
     public Result<PageResult<ChatMessage>> getHistory(
-            @RequestParam Long userId,
+            @RequestParam(required = false) Long userId,
+            @RequestParam(required = false) Long groupId,
             @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "20") int size) {
-        return Result.success(chatMessageService.getHistory(userId, page, size));
+        return Result.success(chatMessageService.getHistory(userId, groupId, page, size));
     }
 }
