@@ -28,9 +28,8 @@ public class ChatController {
      */
     @GetMapping("/users")
     public Result<UserVO> getCurrentUser(Authentication authentication) {
-        // 当前暂从 Authentication 获取 username，后续可改为从 token 解析完整用户信息
-        String currentUser = authentication.getName();
-        return Result.success(userService.getUserById(1L)); // TODO: 替换为真实用户 ID 查询
+        String username = authentication.getName();
+        return Result.success(userService.getUserByUsername(username));
     }
 
     /**

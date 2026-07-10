@@ -29,6 +29,16 @@ public interface UserService {
     UserVO getUserById(Long id);
 
     /**
+     * 根据用户名获取用户
+     */
+    UserVO getUserByUsername(String username);
+
+    /**
+     * 根据用户名获取用户 ID
+     */
+    Long getUserIdByUsername(String username);
+
+    /**
      * 分页查询用户列表
      */
     PageResult<UserVO> listUsers(UserPageQuery query);

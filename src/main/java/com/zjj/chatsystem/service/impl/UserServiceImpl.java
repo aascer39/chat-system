@@ -93,6 +93,23 @@ public class UserServiceImpl implements UserService {
     }
 
     @Override
+    public UserVO getUserByUsername(String username) {
+        User user = userMapper.findByUsername(username)
+                .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
+        if (user.getDeleted() != null && user.getDeleted() == 1) {
+            throw new BusinessException(ErrorCode.USER_NOT_FOUND);
+        }
+        return UserVO.fromEntity(user);
+    }
+
+    @Override
+    public Long getUserIdByUsername(String username) {
+        User user = userMapper.findByUsername(username)
+                .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
+        return user.getId();
+    }
+
+    @Override
     public PageResult<UserVO> listUsers(UserPageQuery query) {
         Page<User> page = new Page<>(query.getPage(), query.getPageSize());
         LambdaQueryWrapper<User> wrapper = new LambdaQueryWrapper<User>()

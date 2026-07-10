@@ -1,7 +1,10 @@
 package com.zjj.chatsystem.websocket;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.zjj.chatsystem.domain.entity.ChatMessage;
+import com.zjj.chatsystem.domain.entity.User;
+import com.zjj.chatsystem.mapper.UserMapper;
 import com.zjj.chatsystem.utils.JwtUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -24,10 +27,12 @@ public class ChatHandler extends TextWebSocketHandler {
 
     private final ObjectMapper objectMapper;
     private final JwtUtil jwtUtil;
+    private final UserMapper userMapper;
 
-    public ChatHandler(ObjectMapper objectMapper, JwtUtil jwtUtil) {
+    public ChatHandler(ObjectMapper objectMapper, JwtUtil jwtUtil, UserMapper userMapper) {
         this.objectMapper = objectMapper;
         this.jwtUtil = jwtUtil;
+        this.userMapper = userMapper;
     }
 
     @Override
@@ -49,8 +54,24 @@ public class ChatHandler extends TextWebSocketHandler {
     @Override
     protected void handleTextMessage(WebSocketSession session, TextMessage message) {
         try {
+            // Parse as generic JSON tree first to check message type
+            JsonNode root = objectMapper.readTree(message.getPayload());
+
+            // Handle system-level messages (PING, etc.)
+            JsonNode typeNode = root.get("type");
+            if (typeNode != null) {
+                String type = typeNode.asText();
+                if ("PING".equals(type)) {
+                    // Heartbeat — respond with PONG
+                    session.sendMessage(new TextMessage("{\"type\":\"PONG\"}"));
+                    return;
+                }
+                // Ignore other unknown system types
+                return;
+            }
+
             String username = (String) session.getAttributes().get("username");
-            ChatMessage chatMessage = objectMapper.readValue(message.getPayload(), ChatMessage.class);
+            ChatMessage chatMessage = objectMapper.treeToValue(root, ChatMessage.class);
             chatMessage.setSenderId(getUserIdByUsername(username));
             chatMessage.setStatus("SENT");
             chatMessage.setCreatedAt(LocalDateTime.now());
@@ -102,8 +123,13 @@ public class ChatHandler extends TextWebSocketHandler {
 
     private String extractToken(WebSocketSession session) {
         String query = session.getUri().getQuery();
-        if (query != null && query.startsWith("token=")) {
-            return query.substring(6);
+        if (query != null) {
+            for (String param : query.split("&")) {
+                String[] pair = param.split("=", 2);
+                if (pair.length == 2 && "token".equals(pair[0])) {
+                    return pair[1];
+                }
+            }
         }
         return null;
     }
@@ -116,12 +142,13 @@ public class ChatHandler extends TextWebSocketHandler {
         }
     }
 
-    // 临时方法，后续从 UserService 获取
     private Long getUserIdByUsername(String username) {
-        return (long) username.hashCode();
+        User user = userMapper.findByUsername(username).orElse(null);
+        return user != null ? user.getId() : (long) username.hashCode();
     }
 
     private String getUsernameById(Long userId) {
-        return String.valueOf(userId);
+        User user = userMapper.selectById(userId);
+        return user != null ? user.getUsername() : String.valueOf(userId);
     }
 }

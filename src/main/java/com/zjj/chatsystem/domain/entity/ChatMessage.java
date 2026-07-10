@@ -3,6 +3,7 @@ package com.zjj.chatsystem.domain.entity;
 import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import lombok.Data;
 
 import java.time.LocalDateTime;
@@ -14,6 +15,7 @@ import java.time.LocalDateTime;
  */
 @Data
 @TableName("chat_messages")
+@JsonIgnoreProperties(ignoreUnknown = true)
 public class ChatMessage {
 
     @TableId(type = IdType.ASSIGN_ID)
