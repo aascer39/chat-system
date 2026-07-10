@@ -105,10 +105,10 @@ metadata:
 采用 4px 递增体系（符合 8px 网格）：
 
 ```css
---font-size-xs:     12px;   /* 辅助信息、标签、时间戳 */
---font-size-sm:     13px;   /* 次要文字、表格内容 */
---font-size-base:   14px;   /* 正文（默认） */
---font-size-lg:     16px;   /* 大号正文、导航 */
+--font-size-xs:     13px;   /* 辅助信息、标签、时间戳 */
+--font-size-sm:     14px;   /* 次要文字、表格内容 */
+--font-size-base:   15px;   /* 正文（默认） */
+--font-size-lg:     17px;   /* 大号正文、导航 */
 --font-size-xl:     20px;   /* 三级标题 */
 --font-size-2xl:    24px;   /* 二级标题 */
 --font-size-3xl:    30px;   /* 一级标题 */
@@ -137,7 +137,7 @@ metadata:
 
 #### 2.5 禁止规则
 
-- ❌ 不使用小于 12px 的文字
+- ❌ 不使用小于 13px 的文字
 - ❌ 不使用 700+ 的粗体（600 semibold 为上限）
 - ❌ 同一页面不超过 4 种字号
 - ❌ 正文不使用斜体（_italic_）作为强调方式
@@ -248,9 +248,9 @@ metadata:
   --el-color-primary-light-9: #eff6ff;
   --el-border-radius-base: 8px;
   --el-border-radius-small: 6px;
-  --el-font-size-base: 14px;
-  --el-font-size-small: 13px;
-  --el-font-size-large: 16px;
+  --el-font-size-base: 15px;
+  --el-font-size-small: 14px;
+  --el-font-size-large: 17px;
 }
 
 /* ✅ 对特定组件做精细化覆盖 */
@@ -559,7 +559,7 @@ $breakpoints: (
 
 **可读性检查**:
 - [ ] 所有文字对比度 ≥ 4.5:1（WCAG AA）
-- [ ] 正文最小字号 14px
+- [ ] 正文最小字号 17px
 - [ ] 行高不低于 1.6
 - [ ] 没有文字溢出/截断问题
 - [ ] 没有过多文字堆叠
@@ -597,16 +597,16 @@ $breakpoints: (
 
 | 场景 | 最小字号 | 说明 |
 |------|---------|------|
-| 页面标题 | `18px` | 页面名称、聊天对象名称等 |
-| 主要正文、列表内容、表单内容 | `15px` | 用户信息、消息内容、列表项文字等 |
-| 可交互文字（按钮、菜单、标签） | `14px` | 所有按钮文字、导航链接、标签文本 |
-| 输入框文字 | `14px` | 输入框内的用户输入和占位提示 |
-| 次要说明、辅助信息、状态提示 | `13px` | 时间戳、在线状态、提示文字、角标数字等 |
-| 用户名、用户标识 | `15px` | 侧栏用户列表、消息发送者标识等 |
+| 页面标题 | `20px` | 页面名称、聊天对象名称等 |
+| 主要正文、列表内容、表单内容 | `17px` | 用户信息、消息内容、列表项文字等 |
+| 用户名、用户标识 | `17px` | 侧栏用户列表、消息发送者标识等 |
+| 可交互文字（按钮、菜单、标签） | `15px` | 所有按钮文字、导航链接、标签文本 |
+| 输入框文字 | `15px` | 输入框内的用户输入和占位提示 |
+| 次要说明、辅助信息、状态提示 | `14px` | 时间戳、在线状态、提示文字、角标数字等 |
 
-> **PC 端正文、列表内容、表单内容等主要信息文字不得小于 15px。**
+> **PC 端正文、列表内容、表单内容等主要信息文字不得小于 17px。**
 >
-> **禁止使用 12px 及以下字体作为主要交互文字、功能入口、按钮文字、导航文字或信息展示文字。**
+> **禁止使用 13px 及以下字体作为主要交互文字、功能入口、按钮文字、导航文字或信息展示文字。**
 
 #### 11.2 可读性原则
 
@@ -625,16 +625,16 @@ $breakpoints: (
 
 #### 11.4 消息与输入区规范
 
-- **消息气泡文字**: `14px` ~ `16px`
+- **消息气泡文字**: `15px` ~ `17px`
 - **气泡圆角**: `12px`，内边距 `12px 16px`
 - **己方气泡**: 背景色 `--color-primary`，文字色 `--color-text-inverse`
 - **对方气泡**: 背景色 `--color-bg-secondary`，文字色 `--color-text-primary`
-- **输入框文字**: `14px` 以上，最小高度 `48px`
+- **输入框文字**: `15px` 以上，最小高度 `48px`
 - **多行输入**: 支持 `Enter` 发送 + `Shift+Enter` 换行
 
 #### 11.5 禁止规则
 
-- ❌ 全局任何位置使用 `12px` 及以下字号作为主要交互文字、功能入口、按钮文字、导航文字或信息展示文字
+- ❌ 全局任何位置使用 `13px` 及以下字号作为主要交互文字、功能入口、按钮文字、导航文字或信息展示文字
 - ❌ 通过缩小字体解决布局拥挤问题
 - ❌ 同一页面局部区域字体明显小于其他区域（视觉不统一）
 - ❌ 侧边栏宽度小于 `280px`
@@ -891,10 +891,10 @@ defineProps<{
 :root {
   --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif;
   --font-mono: 'SF Mono', 'Fira Code', 'Fira Mono', 'Roboto Mono', monospace;
-  --font-size-xs: 12px;
-  --font-size-sm: 13px;
-  --font-size-base: 14px;
-  --font-size-lg: 16px;
+  --font-size-xs: 13px;
+  --font-size-sm: 14px;
+  --font-size-base: 15px;
+  --font-size-lg: 17px;
   --font-size-xl: 20px;
   --font-size-2xl: 24px;
   --font-size-3xl: 30px;
@@ -929,9 +929,9 @@ defineProps<{
   --el-color-primary-light-9: #eff6ff;
   --el-border-radius-base: 8px;
   --el-border-radius-small: 6px;
-  --el-font-size-base: 14px;
-  --el-font-size-small: 13px;
-  --el-font-size-large: 16px;
+  --el-font-size-base: 15px;
+  --el-font-size-small: 14px;
+  --el-font-size-large: 17px;
 }
 ```
 

@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.zjj.chatsystem.domain.entity.ChatMessage;
 import com.zjj.chatsystem.domain.entity.User;
 import com.zjj.chatsystem.mapper.UserMapper;
+import com.zjj.chatsystem.service.ChatMessageService;
 import com.zjj.chatsystem.utils.JwtUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -16,6 +17,8 @@ import org.springframework.web.socket.handler.TextWebSocketHandler;
 
 import java.io.IOException;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -28,11 +31,13 @@ public class ChatHandler extends TextWebSocketHandler {
     private final ObjectMapper objectMapper;
     private final JwtUtil jwtUtil;
     private final UserMapper userMapper;
+    private final ChatMessageService chatMessageService;
 
-    public ChatHandler(ObjectMapper objectMapper, JwtUtil jwtUtil, UserMapper userMapper) {
+    public ChatHandler(ObjectMapper objectMapper, JwtUtil jwtUtil, UserMapper userMapper, ChatMessageService chatMessageService) {
         this.objectMapper = objectMapper;
         this.jwtUtil = jwtUtil;
         this.userMapper = userMapper;
+        this.chatMessageService = chatMessageService;
     }
 
     @Override
@@ -44,8 +49,17 @@ public class ChatHandler extends TextWebSocketHandler {
         }
 
         String username = jwtUtil.getUsernameFromToken(token);
+
+        // 获取用户 ID
+        User user = userMapper.findByUsername(username).orElse(null);
+        if (user == null) {
+            closeSession(session);
+            return;
+        }
+
         onlineUsers.put(username, session);
         session.getAttributes().put("username", username);
+        session.getAttributes().put("userId", user.getId());
 
         log.info("用户 {} 已连接，当前在线人数: {}", username, onlineUsers.size());
         broadcastOnlineCount();
@@ -54,37 +68,65 @@ public class ChatHandler extends TextWebSocketHandler {
     @Override
     protected void handleTextMessage(WebSocketSession session, TextMessage message) {
         try {
-            // Parse as generic JSON tree first to check message type
             JsonNode root = objectMapper.readTree(message.getPayload());
 
-            // Handle system-level messages (PING, etc.)
+            // ── 系统消息 ──
             JsonNode typeNode = root.get("type");
             if (typeNode != null) {
                 String type = typeNode.asText();
-                if ("PING".equals(type)) {
-                    // Heartbeat — respond with PONG
-                    session.sendMessage(new TextMessage("{\"type\":\"PONG\"}"));
-                    return;
+                switch (type) {
+                    case "PING" -> {
+                        session.sendMessage(new TextMessage("{\"type\":\"PONG\"}"));
+                        return;
+                    }
+                    case "READ" -> {
+                        // 已读回执
+                        Long messageId = root.get("messageId").asLong();
+                        chatMessageService.updateStatus(messageId, "READ");
+
+                        // 通知原发送方
+                        ChatMessage readMsg = chatMessageService.getById(messageId);
+                        if (readMsg != null) {
+                            String senderName = getUsernameById(readMsg.getSenderId());
+                            WebSocketSession senderSession = onlineUsers.get(senderName);
+                            if (senderSession != null && senderSession.isOpen()) {
+                                String receipt = objectMapper.writeValueAsString(Map.of(
+                                        "type", "READ_RECEIPT",
+                                        "messageId", messageId,
+                                        "senderId", readMsg.getSenderId()
+                                ));
+                                senderSession.sendMessage(new TextMessage(receipt));
+                            }
+                        }
+                        return;
+                    }
+                    default -> {
+                        return;
+                    }
                 }
-                // Ignore other unknown system types
-                return;
             }
 
+            // ── 聊天消息 ──
             String username = (String) session.getAttributes().get("username");
             ChatMessage chatMessage = objectMapper.treeToValue(root, ChatMessage.class);
             chatMessage.setSenderId(getUserIdByUsername(username));
             chatMessage.setStatus("SENT");
             chatMessage.setCreatedAt(LocalDateTime.now());
 
-            // 发送给指定用户
+            // 写入数据库（同步，之后 chatMessage.getId() 可用）
+            chatMessageService.saveMessage(chatMessage);
+
+            // 推送接收方
             String receiver = getUsernameById(chatMessage.getReceiverId());
             WebSocketSession receiverSession = onlineUsers.get(receiver);
             if (receiverSession != null && receiverSession.isOpen()) {
                 chatMessage.setStatus("DELIVERED");
+                // 更新数据库状态为 DELIVERED
+                chatMessageService.updateStatus(chatMessage.getId(), "DELIVERED");
                 receiverSession.sendMessage(new TextMessage(objectMapper.writeValueAsString(chatMessage)));
             }
 
-            // 回复发送者确认
+            // 回复发送者确认（包含最新状态）
             session.sendMessage(new TextMessage(objectMapper.writeValueAsString(chatMessage)));
 
         } catch (Exception e) {
@@ -108,17 +150,30 @@ public class ChatHandler extends TextWebSocketHandler {
     }
 
     private void broadcastOnlineCount() {
-        String countMessage = "{\"type\":\"ONLINE_COUNT\",\"count\":" + onlineUsers.size() + "}";
-        TextMessage message = new TextMessage(countMessage);
-        onlineUsers.values().forEach(session -> {
-            try {
-                if (session.isOpen()) {
-                    session.sendMessage(message);
+        try {
+            List<Long> onlineUserIds = new ArrayList<>();
+            for (WebSocketSession s : onlineUsers.values()) {
+                Long userId = (Long) s.getAttributes().get("userId");
+                if (userId != null) {
+                    onlineUserIds.add(userId);
                 }
-            } catch (IOException e) {
-                log.error("广播在线人数失败", e);
             }
-        });
+
+            String json = objectMapper.writeValueAsString(Map.of(
+                    "type", "ONLINE_COUNT",
+                    "count", onlineUserIds.size(),
+                    "onlineUserIds", onlineUserIds
+            ));
+            TextMessage message = new TextMessage(json);
+
+            for (WebSocketSession s : onlineUsers.values()) {
+                if (s.isOpen()) {
+                    s.sendMessage(message);
+                }
+            }
+        } catch (Exception e) {
+            log.error("广播在线用户列表失败", e);
+        }
     }
 
     private String extractToken(WebSocketSession session) {

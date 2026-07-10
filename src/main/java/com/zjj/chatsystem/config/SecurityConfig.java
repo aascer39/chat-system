@@ -7,6 +7,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
@@ -22,6 +23,7 @@ import java.util.Collections;
 
 @Configuration
 @EnableWebSecurity
+@EnableMethodSecurity
 public class SecurityConfig {
 
     private final JwtUtil jwtUtil;
@@ -58,20 +60,23 @@ public class SecurityConfig {
             protected void doFilterInternal(HttpServletRequest request,
                                             HttpServletResponse response,
                                             FilterChain filterChain) throws ServletException, IOException {
-                String authHeader = request.getHeader("Authorization");
+                try {
+                    String authHeader = request.getHeader("Authorization");
 
-                if (authHeader != null && authHeader.startsWith("Bearer ")) {
-                    String token = authHeader.substring(7);
-                    if (jwtUtil.validateToken(token)) {
-                        String username = jwtUtil.getUsernameFromToken(token);
-                        // 设置认证信息
-                        var auth = new org.springframework.security.authentication
-                                .UsernamePasswordAuthenticationToken(username, null, Collections.emptyList());
-                        SecurityContextHolder.getContext().setAuthentication(auth);
+                    if (authHeader != null && authHeader.startsWith("Bearer ")) {
+                        String token = authHeader.substring(7);
+                        if (jwtUtil.validateToken(token)) {
+                            String username = jwtUtil.getUsernameFromToken(token);
+                            var auth = new org.springframework.security.authentication
+                                    .UsernamePasswordAuthenticationToken(username, null, Collections.emptyList());
+                            SecurityContextHolder.getContext().setAuthentication(auth);
+                        }
                     }
-                }
 
-                filterChain.doFilter(request, response);
+                    filterChain.doFilter(request, response);
+                } finally {
+                    SecurityContextHolder.clearContext();
+                }
             }
         };
     }

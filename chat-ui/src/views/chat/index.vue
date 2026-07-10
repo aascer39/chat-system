@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox, ElInput } from 'element-plus'
 import { useUserStore } from '@/stores/user'
 import { getCurrentUser } from '@/api/user'
+import { getHistory } from '@/api/chat'
 import {
   getFriendList,
   getPendingRequests,
@@ -23,11 +24,18 @@ const userStore = useUserStore()
 // ── State ──
 const connected = ref(false)
 const onlineCount = ref(0)
+const onlineUserIds = ref<string[]>([])
 const currentUser = ref<UserInfo | null>(null)
 const messages = ref<ChatMessage[]>([])
 const selectedUser = ref<UserInfo | null>(null)
 const inputContent = ref('')
 const loading = ref(true)
+
+// History pagination
+const historyPage = ref(1)
+const historyTotal = ref(0)
+const loadingHistory = ref(false)
+const hasMoreHistory = computed(() => historyTotal.value > messages.value.length)
 
 // Sidebar tabs: 'friends' | 'requests' | 'add'
 const activeTab = ref<'friends' | 'requests' | 'add'>('friends')
@@ -46,6 +54,11 @@ let heartbeatTimer: ReturnType<typeof setInterval> | null = null
 const messagesContainer = ref<HTMLElement | null>(null)
 
 const pendingCount = computed(() => pendingRequests.value.length)
+
+const friendOnlineCount = computed(() => {
+  const currentId = String(currentUser.value?.id ?? '')
+  return onlineUserIds.value.filter(id => id !== currentId).length
+})
 
 // ── Init ──
 onMounted(async () => {
@@ -86,6 +99,47 @@ async function loadPendingRequests() {
   }
 }
 
+// ── History ──
+async function loadHistory() {
+  if (!selectedUser.value) return
+  loadingHistory.value = true
+  try {
+    const res = await getHistory(selectedUser.value.userId, historyPage.value, 20)
+    const list = (res.records || []).reverse() // API 返回倒序（最新在前），反转后最早在前
+    if (historyPage.value === 1) {
+      messages.value = list
+    } else {
+      messages.value = [...list, ...messages.value]
+    }
+    historyTotal.value = Number(res.total || 0)
+    await nextTick()
+    scrollToBottom()
+
+    // 标记已读：将对方发送的未读消息（SENT=未推送或 DELIVERED=已推送）标记为已读
+    if (selectedUser.value) {
+      messages.value = messages.value.map(msg => {
+        if (String(msg.senderId) === String(selectedUser.value.userId) && msg.id) {
+          if (msg.status === 'SENT' || msg.status === 'DELIVERED') {
+            sendReadReceipt(msg.id)
+            return { ...msg, status: 'READ' as const }
+          }
+        }
+        return msg
+      })
+    }
+  } catch {
+    // ignore
+  } finally {
+    loadingHistory.value = false
+  }
+}
+
+async function loadMoreHistory() {
+  if (loadingHistory.value || !hasMoreHistory.value) return
+  historyPage.value++
+  await loadHistory()
+}
+
 // ── WebSocket ──
 function connectWebSocket() {
   const token = userStore.token
@@ -107,13 +161,65 @@ function connectWebSocket() {
   ws.onmessage = (event: MessageEvent) => {
     try {
       const data = safeParse(event.data) as Record<string, unknown>
+
+      // ── 系统消息：在线人数变化 ──
       if (data.type === 'ONLINE_COUNT') {
         onlineCount.value = Number(data.count)
+        onlineUserIds.value = (data.onlineUserIds as string[]) || []
         return
       }
-      const msg = data as unknown as ChatMessage
-      messages.value.push(msg)
-      scrollToBottom()
+
+      // ── 系统消息：心跳响应 ──
+      if (data.type === 'PONG') {
+        return
+      }
+
+      // ── 已读回执 ──
+      if (data.type === 'READ_RECEIPT') {
+        const msgId = String(data.messageId ?? '')
+        const idx = messages.value.findIndex(m => String(m.id) === msgId)
+        if (idx >= 0) {
+          messages.value[idx] = { ...messages.value[idx], status: 'READ' as const }
+        }
+        return
+      }
+
+      // ── 必须是带 senderId/receiverId 的聊天消息 ──
+      const msg = data as ChatMessage
+      if (!msg.senderId && !msg.receiverId) {
+        return
+      }
+
+      // 只显示当前选中会话的消息
+      const otherUserId = String(selectedUser.value?.userId ?? '')
+      const currentUserId = String(currentUser.value?.id ?? '')
+      const msgSenderId = String(msg.senderId ?? '')
+      const msgReceiverId = String(msg.receiverId ?? '')
+      const isCurrentConversation =
+        (msgSenderId === currentUserId && msgReceiverId === otherUserId) ||
+        (msgSenderId === otherUserId && msgReceiverId === currentUserId)
+      if (!isCurrentConversation) {
+        return
+      }
+
+      // 去重：WebSocket 消息可能已在历史记录中
+      const isDuplicate = messages.value.some(m =>
+        String(m.senderId) === msgSenderId &&
+        String(m.receiverId) === msgReceiverId &&
+        m.content === msg.content &&
+        m.createdAt === msg.createdAt
+      )
+      if (!isDuplicate) {
+        messages.value.push(msg)
+        scrollToBottom()
+
+        // 对方发来的消息自动发送已读回执，并本地立即标记为已读
+        if (msg.id && msgSenderId === otherUserId) {
+          sendReadReceipt(msg.id)
+          const lastIdx = messages.value.length - 1
+          messages.value[lastIdx] = { ...messages.value[lastIdx], status: 'READ' as const }
+        }
+      }
     } catch {
       // ignore
     }
@@ -258,12 +364,15 @@ function selectFriend(friend: FriendVO) {
     email: '',
     createdAt: friend.createdAt,
   }
+  // 切换好友时重置消息并加载历史记录
+  messages.value = []
+  historyPage.value = 1
+  historyTotal.value = 0
+  loadHistory()
 }
 
-function getFriendStatus(userId: number): boolean {
-  // For now, just check if this user is online based on WebSocket presence
-  // In a full implementation, you'd maintain a Set of online user IDs
-  return connected.value
+function isFriendOnline(userId: number | string): boolean {
+  return onlineUserIds.value.includes(String(userId))
 }
 
 function switchTab(tab: 'friends' | 'requests' | 'add') {
@@ -280,6 +389,25 @@ function scrollToBottom() {
       messagesContainer.value.scrollTop = messagesContainer.value.scrollHeight
     }
   })
+}
+
+async function onMessagesScroll() {
+  const el = messagesContainer.value
+  if (!el || loadingHistory.value || !hasMoreHistory.value) return
+  // 滚动到顶部附近时加载更早的消息
+  if (el.scrollTop < 80) {
+    const prevHeight = el.scrollHeight
+    await loadMoreHistory()
+    await nextTick()
+    // 保持滚动位置（新内容插入到顶部后，恢复之前的可视位置）
+    el.scrollTop = el.scrollHeight - prevHeight
+  }
+}
+
+function sendReadReceipt(messageId: number | string) {
+  if (!ws || ws.readyState !== WebSocket.OPEN) return
+  // 以字符串形式发送，避免雪花 ID 精度丢失
+  ws.send(JSON.stringify({ type: 'READ', messageId: String(messageId) }))
 }
 
 function handleLogout() {
@@ -357,7 +485,7 @@ function getChatPartnerName(): string {
         <!-- Online Count (R11.5: 8px green dot) -->
         <div class="sidebar-online">
           <span class="online-dot" :class="{ active: connected }"></span>
-          <span>{{ onlineCount }} 人在线</span>
+          <span>{{ onlineCount }} 人在线（好友 {{ friendOnlineCount }} 人）</span>
         </div>
 
         <!-- Tabs -->
@@ -399,9 +527,12 @@ function getChatPartnerName(): string {
             :class="{ active: selectedUser?.userId === friend.userId }"
             @click="selectFriend(friend)"
           >
-            <el-avatar :size="28" :src="friend.avatar" class="user-avatar">
-              {{ friend.nickname?.charAt(0) || 'U' }}
-            </el-avatar>
+            <div class="friend-avatar-wrap">
+              <el-avatar :size="28" :src="friend.avatar" class="user-avatar">
+                {{ friend.nickname?.charAt(0) || 'U' }}
+              </el-avatar>
+              <span class="friend-online-dot" :class="{ online: isFriendOnline(friend.userId) }"></span>
+            </div>
             <span class="user-name">{{ friend.nickname || friend.username }}</span>
             <div class="user-actions">
               <el-button
@@ -483,22 +614,45 @@ function getChatPartnerName(): string {
         </div>
 
         <!-- Messages Area -->
-        <div ref="messagesContainer" class="chat-messages">
-          <div v-if="messages.length === 0" class="chat-empty">
+        <div ref="messagesContainer" class="chat-messages" @scroll="onMessagesScroll">
+          <!-- Load More -->
+          <div v-if="hasMoreHistory && messages.length > 0" class="chat-load-more">
+            <el-button v-if="!loadingHistory" text size="small" @click="loadMoreHistory">
+              加载更早的消息
+            </el-button>
+            <el-button v-else text size="small" loading>
+              加载中...
+            </el-button>
+          </div>
+
+          <!-- Empty State -->
+          <div v-if="messages.length === 0 && !loadingHistory" class="chat-empty">
             <div class="chat-empty-icon">💬</div>
             <h3>暂无消息</h3>
             <p>选择一个好友，开始你的第一次对话吧</p>
           </div>
 
+          <!-- History Loading -->
+          <div v-if="loadingHistory && messages.length === 0" class="chat-empty">
+            <el-skeleton :rows="3" animated />
+          </div>
+
+          <!-- Messages -->
           <div
             v-for="(msg, index) in messages"
-            :key="index"
+            :key="msg.id || index"
             class="message-item"
             :class="getMessageSide(msg)"
           >
             <div class="message-bubble">
               <div class="message-content">{{ msg.content }}</div>
-              <div class="message-time">{{ formatTime(msg.createdAt) }}</div>
+              <div class="message-meta">
+                <span v-if="getMessageSide(msg) === 'right'" class="message-status" :class="'status-' + (msg.status || 'SENT').toLowerCase()">
+                  <template v-if="msg.status === 'READ'">✓✓</template>
+                  <template v-else>✓</template>
+                </span>
+                <span class="message-time">{{ formatTime(msg.createdAt) }}</span>
+              </div>
             </div>
           </div>
         </div>
@@ -769,6 +923,29 @@ function getChatPartnerName(): string {
   opacity: 1;
 }
 
+/* -- Friend online dot (overlay on avatar) -- */
+.friend-avatar-wrap {
+  position: relative;
+  flex-shrink: 0;
+  line-height: 0;
+}
+
+.friend-online-dot {
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: var(--color-text-tertiary);
+  border: 2px solid var(--color-bg-secondary);
+  transition: background-color var(--transition-fast);
+}
+
+.friend-online-dot.online {
+  background-color: var(--color-success);
+}
+
 /* -- Request item -- */
 .request-item {
   display: flex;
@@ -897,11 +1074,48 @@ function getChatPartnerName(): string {
   white-space: pre-wrap;
 }
 
+.message-meta {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+  margin-top: 4px;
+}
+
 .message-time {
   font-size: 12px;
-  margin-top: 4px;
   opacity: 0.65;
-  text-align: right;
+  line-height: 1;
+}
+
+.message-status {
+  font-size: 12px;
+  line-height: 1;
+  font-weight: 600;
+}
+
+/* 右侧蓝色气泡内：白色勾 + 不同透明度区分状态 */
+.message-status.status-sent {
+  color: var(--color-text-inverse);
+  opacity: 0.45;
+}
+
+.message-status.status-delivered {
+  color: var(--color-text-inverse);
+  opacity: 0.7;
+}
+
+/* 已读 → 亮蓝色，与气泡色拉开对比 */
+.message-status.status-read {
+  color: #7dd3fc;
+  opacity: 1;
+}
+
+/* -- Load More -- */
+.chat-load-more {
+  display: flex;
+  justify-content: center;
+  padding: var(--space-2) 0;
 }
 
 /* -- Input area (min-height 48px) -- */

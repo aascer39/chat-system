@@ -14,6 +14,8 @@ import com.zjj.chatsystem.mapper.UserMapper;
 import com.zjj.chatsystem.service.UserService;
 import com.zjj.chatsystem.utils.JwtUtil;
 import org.springframework.beans.BeanUtils;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -81,6 +83,15 @@ public class UserServiceImpl implements UserService {
         result.put("token", token);
         result.put("user", UserVO.fromEntity(user));
         return result;
+    }
+
+    @Override
+    public UserVO getCurrentUser() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null) {
+            throw new BusinessException(ErrorCode.UNAUTHORIZED);
+        }
+        return getUserByUsername(authentication.getName());
     }
 
     @Override

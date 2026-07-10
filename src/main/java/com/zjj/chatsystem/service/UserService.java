@@ -24,6 +24,11 @@ public interface UserService {
     Map<String, Object> login(UserLoginRequest request);
 
     /**
+     * 获取当前登录用户信息
+     */
+    UserVO getCurrentUser();
+
+    /**
      * 根据 ID 获取用户
      */
     UserVO getUserById(Long id);
